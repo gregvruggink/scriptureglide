@@ -1,0 +1,8 @@
+[[permission]]
+identifier = "state-commands"
+description = "Permissions for state management commands"
+commands.allow = [
+  "get_state",
+  "set_state",
+  "open_presentation_window"
+]
