@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "ScriptureGlide",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "identifier": "com.scriptureglide.app",
   "build": {
     "frontendDist": "../dist",
@@ -30,7 +30,7 @@
       "endpoints": [
         "https://raw.githubusercontent.com/gregvruggink/scriptureglide/main/update.json"
       ],
-      "pubkey": "YOUR_PUBKEY_HERE"
+      "pubkey": "RWSn8PtLaxCAehsgRM/1qujfw9rC+wsadZBh4xPdYAkWeyELJ+Jr2vtv"
     }
   },
   "bundle": {
