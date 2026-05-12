@@ -94,7 +94,17 @@ pub fn run() {
             close_presentation_window,
             list_monitors
         ])
-        .setup(|_app| {
+        .setup(|app| {
+            let handle = app.handle().clone();
+            if let Some(main_window) = app.get_webview_window("main") {
+                main_window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { .. } = event {
+                        if let Some(presentation) = handle.get_webview_window("presentation") {
+                            let _ = presentation.close();
+                        }
+                    }
+                });
+            }
             Ok(())
         })
         .run(tauri::generate_context!())

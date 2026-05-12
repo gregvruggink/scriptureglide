@@ -12,6 +12,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "ScriptureGlide",
         "width": 800,
         "height": 600,

@@ -31,7 +31,9 @@ import {
   X,
   XCircle,
   Save,
-  FolderOpen
+  FolderOpen,
+  Circle,
+  Square
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { invoke } from '@tauri-apps/api/core';
@@ -210,7 +212,8 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [esvApiKey, setEsvApiKey] = useState(() => {
-    try { return localStorage.getItem('esvApiKey') || ""; } catch { return ""; }
+    const defaultKey = import.meta.env.VITE_ESV_API_KEY || "";
+    try { return localStorage.getItem('esvApiKey') || defaultKey; } catch { return defaultKey; }
   });
   
   const [activeTool, setActiveTool] = useState<{ type: string, value: string | null } | null>(null);
@@ -229,7 +232,6 @@ export default function App() {
     const initTauri = async () => {
       console.log('Starting Tauri Bridge initialization...');
       for (let i = 0; i < 20; i++) {
-        // More robust: try a direct call to see if the backend is there
         try {
           const m = await invoke('list_monitors');
           console.log('Bridge found via try-call! Fetching hardware info...');
@@ -237,6 +239,7 @@ export default function App() {
           setAvailableMonitors(m as any[]);
           checkForUpdates(false);
           setBridgeError(null);
+
           return;
         } catch (e: any) {
           // If the error is "invoke is not a function", the bridge isn't injected yet
@@ -657,9 +660,11 @@ export default function App() {
     requestAnimationFrame(animateScroll);
   }, [activeVerseIndex, settings.scrollSpeed, settings.textSize, settings.textSpacing, settings.verseCount, settings.maxWidth, settings.oneVersePerLine, settings.showVerseNumbers, verses, appMode]);
 
-  const applyFormat = useCallback((command: string, value: string | null = null) => {
+  const applyFormat = useCallback((command: string, value: string | null = null, skipSync = false) => {
     document.execCommand(command, false, value ?? undefined);
-    setTimeout(() => syncStateToStorage({ index: stateRef.current.activeVerseIndex, forceDomRead: true }), 50);
+    if (!skipSync) {
+      setTimeout(() => syncStateToStorage({ index: stateRef.current.activeVerseIndex, forceDomRead: true }), 50);
+    }
   }, [syncStateToStorage]);
 
   const expandSelectionToWords = useCallback((selection: Selection) => {
@@ -667,13 +672,12 @@ export default function App() {
       if (!selection || selection.rangeCount === 0) return;
       const range = selection.getRangeAt(0);
       
-      // If collapsed, we really need to find the text node at the pointer
+      // If already has selection, don't expand
+      if (!range.collapsed) return;
+
       let startNode = range.startContainer;
       let startOffset = range.startOffset;
-      let endNode = range.endContainer;
-      let endOffset = range.endOffset;
 
-      // Ensure we are working with text nodes
       if (startNode.nodeType === Node.ELEMENT_NODE) {
         if (startNode.childNodes.length > 0) {
           const childIndex = Math.min(startOffset, startNode.childNodes.length - 1);
@@ -682,7 +686,6 @@ export default function App() {
         }
       }
       
-      // Walk deep to find actual text node if we are on an element
       while (startNode && startNode.nodeType !== Node.TEXT_NODE && startNode.firstChild) {
         startNode = startNode.firstChild;
       }
@@ -690,11 +693,9 @@ export default function App() {
       if (startNode && startNode.nodeType === Node.TEXT_NODE) {
         const text = startNode.textContent || "";
         let s = startOffset;
-        let e = range.collapsed ? startOffset : endOffset;
+        let e = startOffset;
         
-        // Expand start
         while (s > 0 && !text[s - 1].match(/\s/)) s--;
-        // Expand end
         while (e < text.length && !text[e].match(/\s/)) e++;
         
         const newRange = document.createRange();
@@ -706,7 +707,7 @@ export default function App() {
     } catch (e) {}
   }, []);
 
-  const applyUnderline = useCallback((color: string) => {
+  const applyUnderline = useCallback((color: string, skipSync = false) => {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return;
     const range = selection.getRangeAt(0);
@@ -724,15 +725,42 @@ export default function App() {
       span.appendChild(contents);
       range.insertNode(span);
       selection.removeAllRanges();
-      setTimeout(() => syncStateToStorage({ index: stateRef.current.activeVerseIndex, forceDomRead: true }), 100);
+      if (!skipSync) {
+        setTimeout(() => syncStateToStorage({ index: stateRef.current.activeVerseIndex, forceDomRead: true }), 100);
+      }
     } catch (e) {}
   }, [syncStateToStorage]);
 
-  const applyEraser = useCallback(() => {
+  const applyShape = useCallback((type: 'circle' | 'box', color: string, skipSync = false) => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    if (range.collapsed) return;
+
+    const span = document.createElement('span');
+    span.className = 'verse-markup';
+    span.style.border = `2px solid ${color}`;
+    span.style.padding = '2px 4px';
+    span.style.margin = '0 -2px';
+    span.style.borderRadius = type === 'circle' ? '999px' : '4px';
+    (span.style as any).boxDecorationBreak = 'clone';
+    (span.style as any).WebkitBoxDecorationBreak = 'clone';
+    
+    try {
+      const contents = range.extractContents();
+      span.appendChild(contents);
+      range.insertNode(span);
+      selection.removeAllRanges();
+      if (!skipSync) {
+        setTimeout(() => syncStateToStorage({ index: stateRef.current.activeVerseIndex, forceDomRead: true }), 100);
+      }
+    } catch (e) {}
+  }, [syncStateToStorage]);
+
+  const applyEraser = useCallback((skipSync = false) => {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return;
     
-    // Clone range BEFORE any DOM changes
     const range = selection.getRangeAt(0).cloneRange();
     const container = containerRef.current;
     if (!container) return;
@@ -740,42 +768,24 @@ export default function App() {
     const isMarkupNode = (node: Node): boolean => {
       if (node.nodeType !== Node.ELEMENT_NODE) return false;
       const el = node as HTMLElement;
-      
-      // CRITICAL: Do not dissolve non-editable elements (like verse numbers)
       if (el.getAttribute('contenteditable') === 'false' || el.contentEditable === 'false') return false;
       if (el.classList.contains('select-none')) return false;
-      
-      // CRITICAL: Do not dissolve the verse structure itself
       if (el.id && el.id.startsWith('verse-')) return false;
       if (el.getAttribute('data-verse-index') !== null) return false;
-
       const tag = el.tagName.toUpperCase();
       const style = el.getAttribute('style') || '';
-      
       if (['B', 'I', 'U', 'STRONG', 'EM', 'MARK', 'FONT', 'STRIKE', 'SPAN'].includes(tag)) {
-        if (style.length > 0) return true;
-        if (el.classList.contains('verse-markup')) return true;
-        if (tag !== 'SPAN') return true;
+        if (style.length > 0 || el.classList.contains('verse-markup') || tag !== 'SPAN') return true;
       }
-      
-      return el.classList.contains('verse-markup') || 
-             el.classList.contains('edit-target') ||
-             el.classList.contains('word-placeholder');
+      return el.classList.contains('verse-markup');
     };
 
     const stripNode = (node: Node): Node | DocumentFragment => {
       if (node.nodeType === Node.TEXT_NODE) return node.cloneNode(true);
-      
-      const el = node as HTMLElement;
       const frag = document.createDocumentFragment();
-      // Recursively strip ALL markup nodes
       Array.from(node.childNodes).forEach(child => frag.appendChild(stripNode(child)));
-
-      // If this node is markup, dissolve it — just return its children
-      if (isMarkupNode(el)) return frag;
-
-      // Otherwise keep the element but with children stripped
-      const clone = el.cloneNode(false) as HTMLElement;
+      if (isMarkupNode(node)) return frag;
+      const clone = node.cloneNode(false) as HTMLElement;
       clone.appendChild(frag);
       return clone;
     };
@@ -783,61 +793,119 @@ export default function App() {
     try {
       const selectedFragment = range.cloneContents();
       const cleanFrag = document.createDocumentFragment();
-      
-      // Preserve the nodes to highlight them later
-      const nodesToInsert = Array.from(selectedFragment.childNodes).map(child => stripNode(child));
-      nodesToInsert.forEach(node => cleanFrag.appendChild(node));
-
-      range.deleteContents();
-      
-      // Before inserting, find the reference for the new range
+      Array.from(selectedFragment.childNodes).forEach(child => cleanFrag.appendChild(stripNode(child)));
       const firstInserted = cleanFrag.firstChild;
       const lastInserted = cleanFrag.lastChild;
-      
+      range.deleteContents();
       range.insertNode(cleanFrag);
-
-      // Restore selection to the newly cleaned content
       if (firstInserted && lastInserted) {
         const newRange = document.createRange();
         newRange.setStartBefore(firstInserted);
         newRange.setEndAfter(lastInserted);
         selection.removeAllRanges();
         selection.addRange(newRange);
-      } else {
-        selection.removeAllRanges();
-        selection.addRange(range);
       }
-    } catch (e) {
-      console.warn("Eraser failed:", e);
+    } catch (e) {}
+    if (!skipSync) {
+      setTimeout(() => syncStateToStorage({ forceDomRead: true }), 100);
     }
-
-    // Use a small delay to ensure DOM is ready for sync
-    setTimeout(() => syncStateToStorage({ forceDomRead: true }), 100);
   }, [syncStateToStorage]);
 
   const clearFormatting = useCallback(() => {
     applyEraser();
   }, [applyEraser]);
 
-  const applyActiveTool = useCallback(() => {
-    if (!activeTool) return;
+  const applyMarkup = useCallback((toolOverride?: { type: string; value: string | null }) => {
+    const tool = toolOverride || activeTool;
+    if (!tool) return;
     const selection = window.getSelection();
     if (!selection) return;
 
-    // Only auto-expand if nothing is selected (cursor only)
     if (selection.isCollapsed) {
       expandSelectionToWords(selection);
     }
 
-    // Re-check after potential expansion
     const freshSelection = window.getSelection();
     if (!freshSelection || freshSelection.rangeCount === 0) return;
     
-    const isEraser = activeTool.type === 'eraser';
+    const isEraser = tool.type === 'eraser';
     const hasSelection = freshSelection.toString().length > 0;
-    
-    // For non-eraser tools, we need some content to work on
     if (!isEraser && !hasSelection) return;
+
+    const range = freshSelection.getRangeAt(0);
+    const container = containerRef.current;
+    if (!container) return;
+
+    // Collect involved verses and their sub-ranges FIRST
+    const allVerses = Array.from(container.querySelectorAll('[id^="verse-"]'));
+    const verseTasks: { el: HTMLElement, startContainer: Node, startOffset: number, endContainer: Node, endOffset: number }[] = [];
+    
+    const startContainer = range.startContainer;
+    const startOffset = range.startOffset;
+    const endContainer = range.endContainer;
+    const endOffset = range.endOffset;
+
+    allVerses.forEach(v => {
+      if (range.intersectsNode(v)) {
+        const el = v as HTMLElement;
+        let vStartNode: Node = el, vStartOff = 0, vEndNode: Node = el, vEndOff = el.childNodes.length;
+
+        if (el.contains(startContainer)) {
+          vStartNode = startContainer;
+          vStartOff = startOffset;
+        } else {
+          vStartNode = el;
+          vStartOff = 0;
+        }
+
+        if (el.contains(endContainer)) {
+          vEndNode = endContainer;
+          vEndOff = endOffset;
+        } else {
+          vEndNode = el;
+          vEndOff = el.childNodes.length;
+        }
+
+        verseTasks.push({ el, startContainer: vStartNode, startOffset: vStartOff, endContainer: vEndNode, endOffset: vEndOff });
+      }
+    });
+
+    if (verseTasks.length > 1) {
+      verseTasks.forEach(task => {
+        try {
+          const vRange = document.createRange();
+          vRange.setStart(task.startContainer, task.startOffset);
+          vRange.setEnd(task.endContainer, task.endOffset);
+
+          if (!vRange.collapsed) {
+            const sel = window.getSelection();
+            if (sel) {
+              sel.removeAllRanges();
+              sel.addRange(vRange);
+              
+              if (isEraser) applyEraser(true);
+              else if (tool.type === 'underlineColor') applyUnderline(activeMarkupColor, true);
+              else if (tool.type === 'circle') applyShape('circle', activeMarkupColor, true);
+              else if (tool.type === 'box') applyShape('box', activeMarkupColor, true);
+              else {
+                const { type, value } = tool;
+                const finalValue = (type === 'foreColor' || type === 'backColor') ? (value || activeMarkupColor) : value;
+                applyFormat(type, finalValue, true);
+              }
+            }
+          }
+        } catch (e) { console.warn("Verse task failed", e); }
+      });
+      
+      window.getSelection()?.removeAllRanges();
+      const finalRange = document.createRange();
+      finalRange.setStartBefore(verseTasks[0].el);
+      finalRange.setEndAfter(verseTasks[verseTasks.length - 1].el);
+      window.getSelection()?.addRange(finalRange);
+      
+      setTimeout(() => syncStateToStorage({ forceDomRead: true }), 200);
+      return;
+    }
 
     const node = freshSelection.anchorNode;
     if (!node) return;
@@ -845,25 +913,26 @@ export default function App() {
     let isInsideEditable = false;
     let curr: Node | null = node;
     while (curr && curr !== document.body) {
-      if (curr === containerRef.current) {
-        isInsideEditable = true;
-        break;
-      }
+      if (curr === containerRef.current) { isInsideEditable = true; break; }
       curr = curr.parentNode;
     }
     
     if (isInsideEditable) {
-      if (isEraser) {
-        clearFormatting();
-      } else if (activeTool.type === 'underlineColor') {
-        applyUnderline(activeMarkupColor);
-      } else {
-        const { type, value } = activeTool;
+      if (isEraser) clearFormatting();
+      else if (tool.type === 'underlineColor') applyUnderline(activeMarkupColor);
+      else if (tool.type === 'circle') applyShape('circle', activeMarkupColor);
+      else if (tool.type === 'box') applyShape('box', activeMarkupColor);
+      else {
+        const { type, value } = tool;
         const finalValue = (type === 'foreColor' || type === 'backColor') ? (value || activeMarkupColor) : value;
         applyFormat(type, finalValue);
       }
     }
-  }, [activeMarkupColor, activeTool, applyFormat, applyUnderline, clearFormatting, expandSelectionToWords]);
+  }, [activeMarkupColor, activeTool, applyFormat, applyUnderline, applyEraser, applyShape, clearFormatting, expandSelectionToWords, syncStateToStorage]);
+
+  const applyActiveTool = useCallback(() => {
+    applyMarkup();
+  }, [applyMarkup]);
 
   const hexToRgba = useCallback((hex: string, intensity: number) => {
     const r = parseInt(hex.slice(1, 3), 16);
@@ -876,22 +945,14 @@ export default function App() {
     if (activeTool && activeTool.type === type && activeTool.value === value) {
       setActiveTool(null);
     } else {
-      setActiveTool({ type, value });
+      const newTool = { type, value };
+      setActiveTool(newTool);
       const selection = window.getSelection();
       if (selection && selection.toString().length > 0) {
-        if (type !== 'eraser') {
-          expandSelectionToWords(selection);
-        }
-        
-        if (type === 'eraser') clearFormatting();
-        else if (type === 'underlineColor') applyUnderline(activeMarkupColor);
-        else {
-          const finalValue = (type === 'foreColor' || type === 'backColor') ? (value || activeMarkupColor) : value;
-          applyFormat(type, finalValue);
-        }
+        applyMarkup(newTool);
       }
     }
-  }, [activeMarkupColor, activeTool, applyFormat, applyUnderline, clearFormatting, expandSelectionToWords]);
+  }, [activeTool, applyMarkup]);
 
   const clearAllFormatting = useCallback(() => {
     if (!window.confirm("Clear all markup and formatting from the current passage?")) return;
@@ -1479,7 +1540,7 @@ export default function App() {
                   <div className={`${settings.oneVersePerLine || verse.isNewChapter || verse.acrostic ? 'flex gap-6 items-start w-full' : 'inline'}`}>
                     {settings.showVerseNumbers && (
                       <span
-                        className={`text-[0.6em] select-none mr-2 transition-opacity ${isActive ? 'opacity-40' : 'opacity-10'} ${settings.oneVersePerLine || verse.isNewChapter || verse.isNewPassage || verse.acrostic ? 'mt-3 flex-shrink-0' : 'inline-block align-top mt-1'}`}
+                        className={`text-[0.6em] select-none mr-2 transition-all ${isActive ? 'opacity-40' : 'opacity-10 blur-[2px]'} ${settings.oneVersePerLine || verse.isNewChapter || verse.isNewPassage || verse.acrostic ? 'mt-3 flex-shrink-0' : 'inline-block align-top mt-1'}`}
                         style={{ color: settings.verseNumberColor, fontFamily: activeFont.css }}
                       >
                         {verseNumber}
@@ -1676,15 +1737,6 @@ export default function App() {
                 >
                   {TRANSLATIONS.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
-                {translation === 'esv' && (
-                  <input 
-                    type="password" 
-                    value={esvApiKey} 
-                    onChange={(e) => setEsvApiKey(e.target.value)} 
-                    placeholder="ESV Key" 
-                    className={`pl-4 h-9 ${uiBtnBg} border ${uiBorder} ${uiText} rounded text-xs focus:outline-none w-24`}
-                  />
-                )}
                 <button 
                   onClick={() => fetchBiblePassage(false)} 
                   disabled={isLoading} 
@@ -1995,10 +2047,10 @@ export default function App() {
                   )}
                   <div className={`${settings.oneVersePerLine || verse.isNewChapter || verse.acrostic ? 'flex gap-4 items-start w-full' : 'inline'}`}>
                     {settings.showVerseNumbers && (
-                      <span 
+                      <span
                         contentEditable={false} 
                         style={{ color: settings.verseNumberColor }}
-                        className={`select-none font-bold text-[0.6em] align-top mt-[0.2em] inline-block shrink-0 transition-opacity ${isRtl ? 'ml-2' : 'mr-2'} ${isActive ? 'opacity-50' : 'opacity-10'}`}
+                        className={`select-none font-bold text-[0.6em] align-top mt-[0.2em] inline-block shrink-0 transition-all ${isRtl ? 'ml-2' : 'mr-2'} ${isActive ? 'opacity-50' : 'opacity-10 blur-[2px]'}`}
                       >
                         {verseNumber}
                       </span>
@@ -2144,6 +2196,20 @@ export default function App() {
                     >
                       <UnderlineIcon size={18} />
                     </button>
+                    <button 
+                      onMouseDown={(e) => { e.preventDefault(); toggleTool('circle'); }}
+                      className={`p-3 rounded-xl transition-all ${activeTool?.type === 'circle' ? 'bg-amber-500 text-slate-900 shadow-lg shadow-amber-500/20' : `${uiTextMuted} ${uiBtnHover} hover:text-amber-500`}`}
+                      title="Circle Tool"
+                    >
+                      <Circle size={18} />
+                    </button>
+                    <button 
+                      onMouseDown={(e) => { e.preventDefault(); toggleTool('box'); }}
+                      className={`p-3 rounded-xl transition-all ${activeTool?.type === 'box' ? 'bg-amber-500 text-slate-900 shadow-lg shadow-amber-500/20' : `${uiTextMuted} ${uiBtnHover} hover:text-amber-500`}`}
+                      title="Box Tool"
+                    >
+                      <Square size={18} />
+                    </button>
                   </div>
 
               <div className={`w-px h-8 ${uiTheme === 'dark' ? 'bg-slate-700' : 'bg-slate-200'} mx-1`} />
@@ -2166,6 +2232,10 @@ export default function App() {
                       if (hasSelection) applyFormat('foreColor', c);
                     } else if (activeTool?.type === 'underlineColor') {
                       if (hasSelection) applyUnderline(c);
+                    } else if (activeTool?.type === 'circle') {
+                      if (hasSelection) applyShape('circle', c);
+                    } else if (activeTool?.type === 'box') {
+                      if (hasSelection) applyShape('box', c);
                     }
                   }} 
                   className={`p-2 rounded-xl transition-all group ${activeMarkupColor === c ? `${uiTheme === 'dark' ? 'bg-slate-700' : 'bg-slate-100'} ring-1 ring-amber-500/50` : uiBtnHover}`}
@@ -2196,6 +2266,10 @@ export default function App() {
                       if (hasSelection) applyFormat('foreColor', c);
                     } else if (activeTool?.type === 'underlineColor') {
                       if (hasSelection) applyUnderline(c);
+                    } else if (activeTool?.type === 'circle') {
+                      if (hasSelection) applyShape('circle', c);
+                    } else if (activeTool?.type === 'box') {
+                      if (hasSelection) applyShape('box', c);
                     }
                   }}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
@@ -2233,6 +2307,14 @@ export default function App() {
                   title="Eraser Tool"
                 >
                   <Eraser size={18} />
+                </button>
+                <div className={`w-px h-6 ${uiTheme === 'dark' ? 'bg-slate-700' : 'bg-slate-200'} mx-1`} />
+                <button 
+                  onClick={clearAllFormatting}
+                  className={`p-3 rounded-xl transition-all ${uiTextMuted} ${uiBtnHover} hover:text-red-500`}
+                  title="Clear All Markups"
+                >
+                  <RotateCcw size={18} />
                 </button>
               </div>
             </motion.div>
