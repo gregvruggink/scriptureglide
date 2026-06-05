@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "ScriptureGlide",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "identifier": "com.scriptureglide.app",
   "build": {
     "frontendDist": "../dist",
@@ -31,7 +31,7 @@
       "endpoints": [
         "https://github.com/gregvruggink/ScriptureGlide/releases/latest/download/latest.json"
       ],
-      "pubkey": "RWT0509NbtQSAwpIfvjsC7YWAbU0VN0JnTfGr5gKSe5giuyaqAHsIAdS"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDdBODAxMDZCNEJGQkYwQTcKUldTbjhQdExheENBZWhzZ1JNLzFxdWpmdzlyQyt3c2FkWkJoNHhQZFlBa1dleUVMSitKcjJ2dHYK"
     }
   },
   "bundle": {
