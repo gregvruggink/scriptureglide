@@ -6,5 +6,7 @@ commands.allow = [
   "set_state",
   "open_presentation_window",
   "close_presentation_window",
-  "list_monitors"
+  "list_monitors",
+  "fetch_youversion",
+  "fetch_url"
 ]
