@@ -4,11 +4,11 @@
   "pub_date": "2026-06-05T03:30:00Z",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTbjhQdExheENBZXEwdlV3bXVEVTRnV0pudnJZYTRwZVF6UGUzWFRoZHZlZ3U5Z0Fjd3diSlo3Sko5WjkyMzQ3M3VBV0p4TS9PY1ZPMDB5RHh3RXVzQ1c0UE9SdUt0QkFNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwNjMxODA1CWZpbGU6U2NyaXB0dXJlR2xpZGVfdW5pdmVyc2FsLmFwcC50YXIuZ3oKelNseUtFYU80SWhpRW5BcTRnTU93Mms1alo5aVJFWXVCN25ZUnU0K0pIOEttY1Fvci9mUWdRWkd0aFd4NmFZbVgvV09pV3BYYnRoM3pxbXdFWFlzQmc9PQo",
       "url": "https://github.com/gregvruggink/ScriptureGlide/releases/download/app-v0.2.5/ScriptureGlide_universal.app.tar.gz"
     },
     "darwin-x86_64": {
-      "signature": "",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTbjhQdExheENBZXEwdlV3bXVEVTRnV0pudnJZYTRwZVF6UGUzWFRoZHZlZ3U5Z0Fjd3diSlo3Sko5WjkyMzQ3M3VBV0p4TS9PY1ZPMDB5RHh3RXVzQ1c0UE9SdUt0QkFNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwNjMxODA1CWZpbGU6U2NyaXB0dXJlR2xpZGVfdW5pdmVyc2FsLmFwcC50YXIuZ3oKelNseUtFYU80SWhpRW5BcTRnTU93Mms1alo5aVJFWXVCN25ZUnU0K0pIOEttY1Fvci9mUWdRWkd0aFd4NmFZbVgvV09pV3BYYnRoM3pxbXdFWFlzQmc9PQo",
       "url": "https://github.com/gregvruggink/ScriptureGlide/releases/download/app-v0.2.5/ScriptureGlide_universal.app.tar.gz"
     },
     "windows-x86_64": {
