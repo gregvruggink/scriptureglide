@@ -1327,13 +1327,21 @@ export default function App() {
       } else if (activeTrans === 'net') {
         const targetUrl = `https://labs.bible.org/api/?passage=${encodeURIComponent(refQuery)}&type=json`;
         let textData = null;
-        try {
-          const res = await fetchWithTimeout(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`);
-          if (res.ok) textData = await res.text(); else throw new Error();
-        } catch (err1) {
-          const res = await fetchWithTimeout(`https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`);
-          if (res.ok) { const proxyData = await res.json(); textData = proxyData.contents; }
-          else throw new Error("Network/Proxy connection failed.");
+        if (isTauriApp) {
+          try {
+            textData = await invoke<string>('fetch_url', { url: targetUrl });
+          } catch (e: any) {
+            throw new Error(`Failed to fetch from labs.bible.org: ${e.message || e}`);
+          }
+        } else {
+          try {
+            const res = await fetchWithTimeout(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`);
+            if (res.ok) textData = await res.text(); else throw new Error();
+          } catch (err1) {
+            const res = await fetchWithTimeout(`https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`);
+            if (res.ok) { const proxyData = await res.json(); textData = proxyData.contents; }
+            else throw new Error("Network/Proxy connection failed.");
+          }
         }
         const jsonData = JSON.parse(textData!);
         if (Array.isArray(jsonData) && jsonData.length > 0) {
@@ -1369,13 +1377,22 @@ export default function App() {
         if (activeTrans === 'clementine') bollsTrans = 'VULG';
         const bollsUrl = `https://bolls.life/get-text/${bollsTrans}/${bookId}/${chapterNum}/`;
         let verseData;
-        try {
-          const res = await fetchWithTimeout(bollsUrl);
-          if (res.ok) verseData = await res.json(); else throw new Error();
-        } catch (e) {
-          const proxyRes = await fetchWithTimeout(`https://api.allorigins.win/get?url=${encodeURIComponent(bollsUrl)}`);
-          const proxyData = await proxyRes.json();
-          verseData = JSON.parse(proxyData.contents);
+        if (isTauriApp) {
+          try {
+            const rawText = await invoke<string>('fetch_url', { url: bollsUrl });
+            verseData = JSON.parse(rawText);
+          } catch (e: any) {
+            throw new Error(`Failed to fetch Bolls translation: ${e.message || e}`);
+          }
+        } else {
+          try {
+            const res = await fetchWithTimeout(bollsUrl);
+            if (res.ok) verseData = await res.json(); else throw new Error();
+          } catch (e) {
+            const proxyRes = await fetchWithTimeout(`https://api.allorigins.win/get?url=${encodeURIComponent(bollsUrl)}`);
+            const proxyData = await proxyRes.json();
+            verseData = JSON.parse(proxyData.contents);
+          }
         }
         
         let filtered;

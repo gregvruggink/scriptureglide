@@ -28,7 +28,8 @@
         "open_presentation_window",
         "close_presentation_window",
         "list_monitors",
-        "fetch_youversion"
+        "fetch_youversion",
+        "fetch_url"
       ]
     }
   ]

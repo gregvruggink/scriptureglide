@@ -77,8 +77,33 @@ async fn list_monitors(app: AppHandle) -> Vec<serde_json::Value> {
 }
 
 #[tauri::command]
+async fn fetch_url(url: String, headers: Option<std::collections::HashMap<String, String>>) -> Result<String, String> {
+    let mut builder = reqwest::Client::builder();
+    builder = builder.user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+    
+    let client = builder.build().map_err(|e| e.to_string())?;
+    let mut req = client.get(&url);
+    if let Some(h) = headers {
+        for (k, v) in h {
+            req = req.header(k, v);
+        }
+    }
+    
+    let res = req.send().await.map_err(|e| e.to_string())?;
+    if !res.status().is_success() {
+        return Err(format!("Request failed with status: {}", res.status()));
+    }
+    
+    let text = res.text().await.map_err(|e| e.to_string())?;
+    Ok(text)
+}
+
+#[tauri::command]
 async fn fetch_youversion(url: String, key: String) -> Result<String, String> {
-    let client = reqwest::Client::new();
+    let mut builder = reqwest::Client::builder();
+    builder = builder.user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+    
+    let client = builder.build().map_err(|e| e.to_string())?;
     let res = client.get(&url)
         .header("X-YVP-App-Key", &key)
         .send()
@@ -110,7 +135,8 @@ pub fn run() {
             open_presentation_window,
             close_presentation_window,
             list_monitors,
-            fetch_youversion
+            fetch_youversion,
+            fetch_url
         ])
         .setup(|app| {
             let handle = app.handle().clone();
