@@ -71,6 +71,8 @@ interface AppSettings {
   targetMonitor?: number;
   showReferenceBox: boolean;
   referenceBoxColor: string;
+  showBookHeader?: boolean;
+  bookHeaderSize?: number;
 }
 
 const DEFAULT_PASSAGE: Verse[] = [
@@ -82,11 +84,14 @@ const DEFAULT_PASSAGE: Verse[] = [
 ];
 
 const TRANSLATIONS = [
-  { id: 'web', name: 'World English Bible (WEB)' },
   { id: 'esv', name: 'English Standard Version (ESV)' },
-  { id: 'kjv', name: 'King James Version (KJV)' },
-  { id: 'bbe', name: 'Bible in Basic English (BBE)' },
   { id: 'net', name: 'NET Bible (NET)' },
+  { id: 'yv-niv', name: 'New International Version (NIV)' },
+  { id: 'yv-nasb', name: 'New American Standard Bible (NASB)' },
+  { id: 'yv-nlt', name: 'New Living Translation (NLT)' },
+  { id: 'kjv', name: 'King James Version (KJV)' },
+  { id: 'web', name: 'World English Bible (WEB)' },
+  { id: 'bbe', name: 'Bible in Basic English (BBE)' },
   { id: 'clementine', name: 'Clementine Latin Vulgate' },
   { id: 'wlc', name: 'Hebrew Old Testament (WLC)' },
   { id: 'lxx', name: 'Greek Septuagint (LXX)' },
@@ -154,6 +159,119 @@ const CANONICAL_BOOKS: Record<number, string> = {
   65: 'Jude', 66: 'Revelation'
 };
 
+const USFM_BOOK_MAP: Record<string, string> = {
+  'genesis': 'GEN', 'exodus': 'EXO', 'leviticus': 'LEV', 'numbers': 'NUM', 'deuteronomy': 'DEU',
+  'joshua': 'JOS', 'judges': 'JDG', 'ruth': 'RUT', '1 samuel': '1SA', '2 samuel': '2SA',
+  '1 kings': '1KI', '2 kings': '2KI', '1 chronicles': '1CH', '2 chronicles': '2CH',
+  'ezra': 'EZR', 'nehemiah': 'NEH', 'esther': 'EST', 'job': 'JOB', 'psalms': 'PSA', 'psalm': 'PSA',
+  'proverbs': 'PRO', 'ecclesiastes': 'ECC', 'song of solomon': 'SNG', 'song of songs': 'SNG',
+  'isaiah': 'ISA', 'jeremiah': 'JER', 'lamentations': 'LAM', 'ezekiel': 'EZK', 'daniel': 'DAN',
+  'hosea': 'HOS', 'joel': 'JOL', 'amos': 'AMO', 'obadiah': 'OBA', 'jonah': 'JON', 'micah': 'MIC',
+  'nahum': 'NAM', 'habakkuk': 'HAB', 'zephaniah': 'ZEP', 'haggai': 'HAG', 'zechariah': 'ZEC', 'malachi': 'MAL',
+  'matthew': 'MAT', 'mark': 'MRK', 'luke': 'LUK', 'john': 'JHN', 'acts': 'ACT', 'romans': 'ROM',
+  '1 corinthians': '1CO', '2 corinthians': '2CO', 'galatians': 'GAL', 'ephesians': 'EPH',
+  'philippians': 'PHP', 'colossians': 'COL', '1 thessalonians': '1TH', '2 thessalonians': '2TH',
+  '1 timothy': '1TI', '2 timothy': '2TI', 'titus': 'TIT', 'philemon': 'PHM', 'hebrews': 'HEB',
+  'james': 'JAS', '1 peter': '1PE', '2 peter': '2PE', '1 john': '1JN', '2 john': '2JN', '3 john': '3JN',
+  'jude': 'JUD', 'revelation': 'REV'
+};
+
+function parseYouVersionHtml(html: string, bookName: string, chapter: string): { reference: string, text: string }[] {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  const versesList: { number: string, text: string }[] = [];
+  
+  let currentVerseNumber = "";
+  let currentVerseText = "";
+  
+  function walk(node: Node) {
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as HTMLElement;
+      
+      const vAttr = el.getAttribute('v');
+      const isYvVerse = el.classList.contains('yv-v') && vAttr;
+      
+      if (isYvVerse) {
+        if (currentVerseNumber && currentVerseText.trim()) {
+          versesList.push({ number: currentVerseNumber, text: currentVerseText.trim() });
+        }
+        currentVerseNumber = vAttr;
+        currentVerseText = "";
+        return;
+      }
+      
+      if (el.classList.contains('yv-vlbl') || el.tagName === 'SUP') {
+        return;
+      }
+      
+      const usfm = el.getAttribute('data-usfm');
+      const className = el.className || "";
+      const isLabelOrV = className.split(' ').some(c => c === 'v' || c === 'verse-num' || c === 'label');
+      
+      if (usfm) {
+        if (currentVerseNumber && currentVerseText.trim()) {
+          versesList.push({ number: currentVerseNumber, text: currentVerseText.trim() });
+        }
+        const parts = usfm.split('.');
+        currentVerseNumber = parts[parts.length - 1];
+        currentVerseText = "";
+        
+        for (let i = 0; i < el.childNodes.length; i++) {
+          const child = el.childNodes[i];
+          if (child.nodeType === Node.ELEMENT_NODE) {
+            const childEl = child as HTMLElement;
+            const childClass = childEl.className || "";
+            if (childClass.split(' ').some(c => c === 'v' || c === 'verse-num' || c === 'label') || childEl.tagName === 'SUP') {
+              continue;
+            }
+          }
+          walk(child);
+        }
+        return;
+      }
+      
+      if (isLabelOrV) {
+        const text = el.textContent?.trim() || "";
+        if (/^\d+$/.test(text)) {
+          if (currentVerseNumber && currentVerseText.trim()) {
+            versesList.push({ number: currentVerseNumber, text: currentVerseText.trim() });
+          }
+          currentVerseNumber = text;
+          currentVerseText = "";
+          return;
+        }
+      }
+    }
+    
+    if (node.nodeType === Node.TEXT_NODE) {
+      currentVerseText += node.textContent;
+    }
+    
+    for (let i = 0; i < node.childNodes.length; i++) {
+      walk(node.childNodes[i]);
+    }
+  }
+  
+  walk(doc.body);
+  
+  if (currentVerseNumber && currentVerseText.trim()) {
+    versesList.push({ number: currentVerseNumber, text: currentVerseText.trim() });
+  }
+  
+  if (versesList.length === 0) {
+    const cleanText = doc.body.textContent || "";
+    return [{
+      reference: formatReference(`${bookName} ${chapter}`),
+      text: cleanText.trim()
+    }];
+  }
+  
+  return versesList.map(v => ({
+    reference: formatReference(`${bookName} ${chapter}:${v.number}`),
+    text: v.text.replace(/\s+/g, ' ').trim()
+  }));
+}
+
 const DEFAULT_SETTINGS: AppSettings = {
   textSize: 36,
   textSpacing: 1.7,
@@ -167,11 +285,13 @@ const DEFAULT_SETTINGS: AppSettings = {
   showVerseNumbers: true,
   oneVersePerLine: false,
   verseNumberColor: '#000000',
-  defaultTranslation: 'web',
+  defaultTranslation: 'esv',
   maxWidth: 1024,
   targetMonitor: 1,
   showReferenceBox: true,
-  referenceBoxColor: '#1e293b'
+  referenceBoxColor: '#1e293b',
+  showBookHeader: true,
+  bookHeaderSize: 64
 };
 
 export default function App() {
@@ -207,7 +327,7 @@ export default function App() {
         if (parsed.settings?.defaultTranslation) return parsed.settings.defaultTranslation;
       }
     } catch (e) {}
-    return "web";
+    return "esv";
   });
   const [isLoading, setIsLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -1133,7 +1253,40 @@ export default function App() {
       const currentBookName = canonicalBook; 
       const isBookStart = refQuery.toLowerCase().includes(' 1:1') || refQuery.toLowerCase().includes(' 1:1-');
 
-      if (activeTrans === 'esv') {
+      if (activeTrans.startsWith('yv-')) {
+        const yvKey = "XiJCKjmkQ1e0AlAwkbMKY5nyAIb7T4Y2eAhY8KHiYnuGrqGa";
+        const translationIdMap: Record<string, string> = {
+          'yv-niv': '111',
+          'yv-nlt': '116',
+          'yv-nasb': '100',
+          'yv-esv': '59'
+        };
+        const versionId = translationIdMap[activeTrans] || '111';
+        const usfmBook = USFM_BOOK_MAP[canonicalBook.toLowerCase()] || canonicalBook.substring(0, 3).toUpperCase();
+        const formattedRange = rawRange.replace(':', '.');
+        const yvRef = `${usfmBook}.${formattedRange}`;
+
+        const res = await fetchWithTimeout(`https://api.youversion.com/v1/bibles/${versionId}/passages/${yvRef}?format=html`, {
+          headers: { 'X-YVP-App-Key': yvKey }
+        });
+        if (!res.ok) throw new Error("Failed to fetch from YouVersion API.");
+        const data = await res.json();
+        
+        const content = data.data?.content || data.content;
+        if (!content) throw new Error("Passage not found in YouVersion response.");
+
+        const chapterMatch = rawRange.match(/^(\d+)/);
+        const currentChapter = chapterMatch ? chapterMatch[1] : "1";
+
+        const parsedVerses = parseYouVersionHtml(content, currentBookName, currentChapter);
+        
+        fetchedVersesRaw = parsedVerses.map(v => ({
+          id: `yv-${versionId}-${v.reference.replace(/\s+/g, '-')}-${Math.random().toString(36).substr(2, 5)}`,
+          reference: v.reference,
+          text: v.text
+        }));
+
+      } else if (activeTrans === 'esv') {
         if (!esvApiKey) throw new Error("Please enter a free API key from api.esv.org.");
         const res = await fetchWithTimeout(`https://api.esv.org/v3/passage/text/?q=${encodeURIComponent(refQuery)}&include-passage-references=false&include-footnotes=false&include-headings=false&include-short-copyright=false`, {
           headers: { 'Authorization': `Token ${esvApiKey}` }
@@ -1517,9 +1670,9 @@ export default function App() {
 
             return (
               <React.Fragment key={verse.id}>
-                {verse.bookHeader && (
+                {verse.bookHeader && settings.showBookHeader !== false && (
                   <div className="w-full text-center py-16 md:py-24 opacity-40 select-none">
-                    <h2 className="text-8xl md:text-9xl font-bold uppercase tracking-widest break-words" style={{ fontFamily: activeFont.css }}>
+                    <h2 className="font-bold uppercase tracking-widest break-words" style={{ fontFamily: activeFont.css, fontSize: `${(settings.bookHeaderSize || 64) * 1.5}px` }}>
                       {verse.bookHeader}
                     </h2>
                   </div>
@@ -1904,6 +2057,34 @@ export default function App() {
                         </div>
                       </button>
 
+                      <button 
+                        onClick={() => setSettings({...settings, showBookHeader: settings.showBookHeader === false ? true : false})}
+                        className={`flex items-center justify-between p-3 rounded-lg border text-xs transition-all ${settings.showBookHeader !== false ? 'bg-amber-500/10 border-amber-500 text-amber-500 font-bold' : `${uiTheme === 'dark' ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-200'} ${uiTheme === 'dark' ? 'text-slate-400' : 'text-slate-500'} hover:bg-amber-500/5`}`}
+                      >
+                        <span>Show Book Title</span>
+                        <div className={`w-8 h-4 rounded-full relative transition-colors ${settings.showBookHeader !== false ? 'bg-amber-500' : (uiTheme === 'dark' ? 'bg-slate-800' : 'bg-slate-200')}`}>
+                          <div className={`absolute top-1 w-2 h-2 rounded-full bg-white transition-all ${settings.showBookHeader !== false ? 'right-1' : 'left-1'}`} />
+                        </div>
+                      </button>
+
+                      {settings.showBookHeader !== false && (
+                        <div className={`${uiTheme === 'dark' ? 'bg-slate-800' : 'bg-white'} p-3 rounded-lg border ${uiBorder} shadow-sm ${uiText}`}>
+                          <label className={`flex justify-between text-[10px] font-bold ${uiTheme === 'dark' ? 'text-slate-400' : 'text-slate-500'} uppercase tracking-widest mb-2`}>
+                            <span>Title Size</span>
+                            <span className={`${uiText} font-mono`}>{settings.bookHeaderSize || 64}px</span>
+                          </label>
+                          <input 
+                            type="range" 
+                            min="24" 
+                            max="120" 
+                            step="2" 
+                            value={settings.bookHeaderSize || 64} 
+                            onChange={(e) => setSettings({...settings, bookHeaderSize: parseInt(e.target.value)})} 
+                            className={`w-full h-1.5 ${uiTheme === 'dark' ? 'bg-slate-700' : 'bg-slate-100'} rounded-lg appearance-none cursor-pointer accent-amber-600`}
+                          />
+                        </div>
+                      )}
+
                       <div className="flex flex-col gap-2 mt-2">
                         <label className={`text-[9px] font-bold uppercase tracking-widest ${uiTheme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Reference Box Color</label>
                         <div className="flex gap-2">
@@ -2019,9 +2200,9 @@ export default function App() {
             
             return (
               <React.Fragment key={verse.id}>
-                {verse.bookHeader && (
+                {verse.bookHeader && settings.showBookHeader !== false && (
                   <div className="w-full text-center py-12 md:py-16 opacity-40 select-none">
-                    <h2 className="text-6xl md:text-7xl font-bold uppercase tracking-widest break-words" style={{ fontFamily: activeFont.css }}>
+                    <h2 className="font-bold uppercase tracking-widest break-words" style={{ fontFamily: activeFont.css, fontSize: `${settings.bookHeaderSize || 64}px` }}>
                       {verse.bookHeader}
                     </h2>
                   </div>
