@@ -86,6 +86,8 @@ const DEFAULT_PASSAGE: Verse[] = [
 const TRANSLATIONS = [
   { id: 'esv', name: 'English Standard Version (ESV)' },
   { id: 'net', name: 'NET Bible (NET)' },
+  { id: 'yv-niv', name: 'New International Version (NIV)' },
+  { id: 'yv-nasb', name: 'New American Standard Bible (NASB)' },
   { id: 'kjv', name: 'King James Version (KJV)' },
   { id: 'web', name: 'World English Bible (WEB)' },
   { id: 'bbe', name: 'Bible in Basic English (BBE)' },
