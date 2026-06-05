@@ -29,7 +29,7 @@
     "updater": {
       "active": true,
       "endpoints": [
-        "https://raw.githubusercontent.com/gregvruggink/ScriptureGlide/main/update.json"
+        "https://github.com/gregvruggink/ScriptureGlide/releases/latest/download/latest.json"
       ],
       "pubkey": "RWT0509NbtQSAwpIfvjsC7YWAbU0VN0JnTfGr5gKSe5giuyaqAHsIAdS"
     }
