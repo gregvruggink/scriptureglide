@@ -76,6 +76,23 @@ async fn list_monitors(app: AppHandle) -> Vec<serde_json::Value> {
     }).collect()
 }
 
+#[tauri::command]
+async fn fetch_youversion(url: String, key: String) -> Result<String, String> {
+    let client = reqwest::Client::new();
+    let res = client.get(&url)
+        .header("X-YVP-App-Key", &key)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    if !res.status().is_success() {
+        return Err(format!("Request failed with status: {}", res.status()));
+    }
+    
+    let text = res.text().await.map_err(|e| e.to_string())?;
+    Ok(text)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -92,7 +109,8 @@ pub fn run() {
             set_state,
             open_presentation_window,
             close_presentation_window,
-            list_monitors
+            list_monitors,
+            fetch_youversion
         ])
         .setup(|app| {
             let handle = app.handle().clone();

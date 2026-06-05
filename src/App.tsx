@@ -332,7 +332,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [esvApiKey, setEsvApiKey] = useState(() => {
-    const defaultKey = import.meta.env.VITE_ESV_API_KEY || "";
+    const defaultKey = (import.meta as any).env?.VITE_ESV_API_KEY || "529ce3f16ed2a1f62d376cd4162d4765ea3dbba4";
     try { return localStorage.getItem('esvApiKey') || defaultKey; } catch { return defaultKey; }
   });
   
@@ -966,7 +966,7 @@ export default function App() {
     const endOffset = range.endOffset;
 
     allVerses.forEach(v => {
-      if (range.intersectsNode(v)) {
+      if (range.intersectsNode(v as Node)) {
         const el = v as HTMLElement;
         let vStartNode: Node = el, vStartOff = 0, vEndNode: Node = el, vEndOff = el.childNodes.length;
 
@@ -1266,13 +1266,30 @@ export default function App() {
         const formattedRange = rawRange.replace(':', '.');
         const yvRef = `${usfmBook}.${formattedRange}`;
 
-        const res = await fetchWithTimeout(`https://api.youversion.com/v1/bibles/${versionId}/passages/${yvRef}?format=html`, {
-          headers: { 'X-YVP-App-Key': yvKey }
-        });
-        if (!res.ok) throw new Error("Failed to fetch from YouVersion API.");
-        const data = await res.json();
-        
-        const content = data.data?.content || data.content;
+        let content: string;
+        if (isTauriApp) {
+          try {
+            const rawHtml = await invoke<string>('fetch_youversion', {
+              url: `https://api.youversion.com/v1/bibles/${versionId}/passages/${yvRef}?format=html`,
+              key: yvKey
+            });
+            try {
+              const data = JSON.parse(rawHtml);
+              content = data.data?.content || data.content;
+            } catch {
+              content = rawHtml;
+            }
+          } catch (e: any) {
+            throw new Error(`Failed to fetch from YouVersion API: ${e.message || e}`);
+          }
+        } else {
+          const res = await fetchWithTimeout(`https://api.youversion.com/v1/bibles/${versionId}/passages/${yvRef}?format=html`, {
+            headers: { 'X-YVP-App-Key': yvKey }
+          });
+          if (!res.ok) throw new Error("Failed to fetch from YouVersion API.");
+          const data = await res.json();
+          content = data.data?.content || data.content;
+        }
         if (!content) throw new Error("Passage not found in YouVersion response.");
 
         const chapterMatch = rawRange.match(/^(\d+)/);
