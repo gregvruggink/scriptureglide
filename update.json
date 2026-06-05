@@ -1,19 +1,19 @@
 {
-  "version": "0.2.2",
-  "notes": "Bug fixes, UI improvements, and ESV API integration.",
-  "pub_date": "2026-05-12T16:45:32Z",
+  "version": "0.2.5",
+  "notes": "Add YouVersion API translations and title layout settings.",
+  "pub_date": "2026-06-05T03:30:00Z",
   "platforms": {
     "darwin-aarch64": {
       "signature": "",
-      "url": "https://github.com/gregvruggink/ScriptureGlide/releases/download/app-v0.2.2/ScriptureGlide_universal.app.tar.gz"
+      "url": "https://github.com/gregvruggink/ScriptureGlide/releases/download/app-v0.2.5/ScriptureGlide_universal.app.tar.gz"
     },
     "darwin-x86_64": {
       "signature": "",
-      "url": "https://github.com/gregvruggink/ScriptureGlide/releases/download/app-v0.2.2/ScriptureGlide_universal.app.tar.gz"
+      "url": "https://github.com/gregvruggink/ScriptureGlide/releases/download/app-v0.2.5/ScriptureGlide_universal.app.tar.gz"
     },
     "windows-x86_64": {
       "signature": "",
-      "url": "https://github.com/gregvruggink/ScriptureGlide/releases/download/app-v0.2.2/ScriptureGlide_0.2.2_x64_en-US.msi"
+      "url": "https://github.com/gregvruggink/ScriptureGlide/releases/download/app-v0.2.5/ScriptureGlide_0.2.5_x64_en-US.msi"
     }
   }
 }
