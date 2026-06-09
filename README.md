@@ -2,8 +2,6 @@
 
 **ScriptureGlide** is a professional, high-performance scripture presentation system designed for churches, study groups, speakers, and personal study. It features a modern, responsive React-based control interface and a robust Tauri/Rust backend designed for zero-latency, multi-display visual projections.
 
-![ScriptureGlide Banner](https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6)
-
 ---
 
 ## 📖 Table of Contents
@@ -90,49 +88,6 @@ Click the **Settings Cog** in the top right to customize:
 - **Highlight Intensity:** Set transparency levels for markup highlights.
 - **Colors:** Adjust background color, theme (Dark/Light), reference box color, and verse number color.
 - **Target Display:** Select which monitor projects the presentation.
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-- [Node.js](https://nodejs.org/) (Latest LTS)
-- [Rust & Cargo](https://www.rust-lang.org/) (For Tauri compilation)
-
-### Installation
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/gregvruggink/ScriptureGlide.git
-   cd scriptureglide
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
-
-3. **Optional ESV API Key:**
-   To use the ESV translation, register for an API key at [api.esv.org](https://api.esv.org/) and enter it in the settings dashboard of the app.
-
----
-
-## 🛠️ Development
-
-Run the application in development mode:
-```bash
-npm run tauri:dev
-```
-This launches the backend dev server and opens the hot-reloaded desktop application.
-
----
-
-## 🏗️ Building Installers
-
-To compile production-ready installers for your current platform:
-```bash
-npm run tauri:build
-```
 Compiled setups can be found in `src-tauri/target/release/bundle/`.
 
 ---
