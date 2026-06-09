@@ -749,13 +749,18 @@ export default function App() {
     const groupCenter = groupTop + (groupHeight / 2);
     
     // In control mode, we have a thick bottom toolbar
-    // In present mode, we have a reference box
+    // In present mode, we have a reference box (if enabled)
     // We want the text centered in the REMAINING visual space to the eye
-    const chromeHeight = appMode === 'control' ? 140 : 80;
+    let chromeHeight = 0;
+    if (appMode === 'control') {
+      chromeHeight = 140;
+    } else if (appMode === 'present') {
+      chromeHeight = settings.showReferenceBox ? 140 : 40;
+    }
     const visualCenter = (container.clientHeight - chromeHeight) / 2;
     
-    // Fine-tune target: slight offset upward for better visual balance
-    const targetScroll = Math.max(0, groupCenter - visualCenter - 15);
+    // Mathematically center active group in the visual space
+    const targetScroll = Math.max(0, groupCenter - visualCenter);
     
     const startScroll = container.scrollTop;
     const distance = targetScroll - startScroll;
@@ -1685,14 +1690,14 @@ export default function App() {
           </div>
         )}
 
-        <div className="h-[20vh] flex-shrink-0" />
+        <div className="h-[40vh] flex-shrink-0" />
         <div 
           className={`mx-auto w-full transition-all duration-300 px-6 md:px-12 lg:px-16 ${settings.oneVersePerLine ? 'flex flex-col gap-12' : 'text-start tracking-wide'}`}
           style={{ 
             fontSize: `${settings.textSize}px`, 
             lineHeight: settings.textSpacing, 
             maxWidth: `${settings.maxWidth}px`,
-            paddingBottom: '20vh'
+            paddingBottom: '40vh'
           }}
         >
           {verses.map((verse, index) => {
@@ -2223,8 +2228,8 @@ export default function App() {
           }
         } }
       >
-        <div className="h-[20vh] flex-shrink-0" />
-        <div key={resetKey} className={`mx-auto w-full transition-all duration-300 select-text ${settings.oneVersePerLine ? 'flex flex-col gap-8' : 'text-start tracking-wide'}`} style={{ fontSize: `${settings.textSize}px`, lineHeight: settings.textSpacing, paddingBottom: '20vh', maxWidth: `${settings.maxWidth}px` }} dir={translation === 'wlc' ? 'rtl' : 'ltr'}>
+        <div className="h-[40vh] flex-shrink-0" />
+        <div key={resetKey} className={`mx-auto w-full transition-all duration-300 select-text ${settings.oneVersePerLine ? 'flex flex-col gap-8' : 'text-start tracking-wide'}`} style={{ fontSize: `${settings.textSize}px`, lineHeight: settings.textSpacing, paddingBottom: '40vh', maxWidth: `${settings.maxWidth}px` }} dir={translation === 'wlc' ? 'rtl' : 'ltr'}>
           {verses.map((verse, index) => {
             const fullRef = verse.reference.split(' ').pop() || '';
             const verseNumber = (index === 0 || verse.isNewChapter || verse.isNewPassage) ? fullRef : (fullRef.split(':')[1] || fullRef);
