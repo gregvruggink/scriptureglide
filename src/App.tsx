@@ -33,7 +33,11 @@ import {
   Save,
   FolderOpen,
   Circle,
-  Square
+  Square,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Library
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { invoke } from '@tauri-apps/api/core';
@@ -293,17 +297,223 @@ const DEFAULT_SETTINGS: AppSettings = {
   bookHeaderSize: 64
 };
 
+interface ScriptureSession {
+  id: string;
+  name: string;
+  verses: Verse[];
+  translation: string;
+  activeVerseIndex: number;
+  referenceInput: string;
+  filePath?: string;
+}
+
 export default function App() {
   const [appMode, setAppMode] = useState<'select' | 'control' | 'present'>('select');
   const [displayMode, setDisplayMode] = useState<'single' | 'dual'>(() => {
     try { return (localStorage.getItem('osb_display_mode') as 'single' | 'dual') || 'single'; } catch { return 'single'; }
   });
-  const [verses, setVerses] = useState<Verse[]>(DEFAULT_PASSAGE);
+  const [isTauriApp, setIsTauriApp] = useState(getIsTauri());
+  const [syncChannel] = useState(() => {
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        return new BroadcastChannel('verse_sync_channel');
+      }
+    } catch (e) {}
+    return { postMessage: () => {}, onmessage: null } as unknown as BroadcastChannel;
+  });
+
+  const [sessions, setSessions] = useState<ScriptureSession[]>(() => {
+    try {
+      const saved = localStorage.getItem('osb_sessions');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return [{
+      id: 'default',
+      name: 'Genesis 1:1-5 (ESV)',
+      verses: DEFAULT_PASSAGE,
+      translation: 'esv',
+      activeVerseIndex: 0,
+      referenceInput: 'Genesis 1:1-5'
+    }];
+  });
+
+  const [activeSessionId, setActiveSessionId] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('osb_active_session_id');
+      if (saved && saved !== 'null') return saved;
+    } catch (e) {}
+    return 'default';
+  });
+
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    try {
+      return localStorage.getItem('osb_sidebar_open') !== 'false';
+    } catch {
+      return true;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('osb_sessions', JSON.stringify(sessions));
+    } catch (e) {}
+  }, [sessions]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('osb_active_session_id', activeSessionId);
+    } catch (e) {}
+  }, [activeSessionId]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('osb_sidebar_open', sidebarOpen.toString());
+    } catch (e) {}
+  }, [sidebarOpen]);
+
+  const activeSession = useMemo(() => {
+    return sessions.find(s => s.id === activeSessionId) || sessions[0] || {
+      id: 'default',
+      name: 'Genesis 1:1-5 (ESV)',
+      verses: DEFAULT_PASSAGE,
+      translation: 'esv',
+      activeVerseIndex: 0,
+      referenceInput: 'Genesis 1:1-5'
+    };
+  }, [sessions, activeSessionId]);
+
+  const verses = activeSession.verses;
+  const activeVerseIndex = activeSession.activeVerseIndex;
+  const translation = activeSession.translation;
+  const referenceInput = activeSession.referenceInput;
+
+  const activeSessionIdRef = useRef(activeSessionId);
+  useEffect(() => {
+    activeSessionIdRef.current = activeSessionId;
+  }, [activeSessionId]);
+
+  const setVerses = useCallback((newVerses: Verse[] | ((prev: Verse[]) => Verse[])) => {
+    setSessions(prev => prev.map(s => {
+      if (s.id === activeSessionIdRef.current) {
+        const resolvedVerses = typeof newVerses === 'function' ? newVerses(s.verses) : newVerses;
+        const updated = { ...s, verses: resolvedVerses };
+        if (resolvedVerses.length > 0) {
+          const isCustom = resolvedVerses[0].reference.startsWith('Segment');
+          if (isCustom) {
+            updated.name = updated.name.startsWith('Custom Text') ? updated.name : `Custom Text (${resolvedVerses.length} lines)`;
+          } else {
+            const firstRef = resolvedVerses[0].reference;
+            const lastRef = resolvedVerses[resolvedVerses.length - 1].reference;
+            const cleanFirst = firstRef.replace(/\./g, '');
+            const cleanLast = lastRef.replace(/\./g, '');
+            const firstParts = cleanFirst.split(' ');
+            const lastParts = cleanLast.split(' ');
+            let combinedRef = cleanFirst;
+            if (cleanFirst !== cleanLast) {
+              if (firstParts[0] === lastParts[0] && cleanFirst.includes(':') && cleanLast.includes(':')) {
+                const firstChapV = firstParts[firstParts.length - 1];
+                const lastChapV = lastParts[lastParts.length - 1];
+                const firstV = firstChapV.split(':')[1];
+                const lastV = lastChapV.split(':')[1];
+                const chap = firstChapV.split(':')[0];
+                if (firstChapV.split(':')[0] === lastChapV.split(':')[0]) {
+                  combinedRef = `${firstParts.slice(0, -1).join(' ')} ${chap}:${firstV}-${lastV}`;
+                } else {
+                  combinedRef = `${cleanFirst} - ${lastChapV}`;
+                }
+              } else {
+                combinedRef = `${cleanFirst} - ${cleanLast}`;
+              }
+            }
+            updated.name = `${combinedRef} (${updated.translation.toUpperCase()})`;
+          }
+        } else {
+          updated.name = 'Empty Session';
+        }
+        return updated;
+      }
+      return s;
+    }));
+  }, []);
+
+  const setActiveVerseIndex = useCallback((newIndex: number | ((prev: number) => number)) => {
+    setSessions(prev => prev.map(s => {
+      if (s.id === activeSessionIdRef.current) {
+        const resolvedIndex = typeof newIndex === 'function' ? newIndex(s.activeVerseIndex) : newIndex;
+        return { ...s, activeVerseIndex: resolvedIndex };
+      }
+      return s;
+    }));
+  }, []);
+
+  const setTranslation = useCallback((newTrans: string | ((prev: string) => string)) => {
+    setSessions(prev => prev.map(s => {
+      if (s.id === activeSessionIdRef.current) {
+        const resolvedTrans = typeof newTrans === 'function' ? newTrans(s.translation) : newTrans;
+        const updated = { ...s, translation: resolvedTrans };
+        if (updated.verses.length > 0 && !updated.verses[0].reference.startsWith('Segment')) {
+          const parts = updated.name.lastIndexOf(' (');
+          if (parts !== -1) {
+            updated.name = updated.name.substring(0, parts) + ` (${resolvedTrans.toUpperCase()})`;
+          }
+        }
+        return updated;
+      }
+      return s;
+    }));
+  }, []);
+
+  const setReferenceInput = useCallback((newInput: string | ((prev: string) => string)) => {
+    setSessions(prev => prev.map(s => {
+      if (s.id === activeSessionIdRef.current) {
+        const resolvedInput = typeof newInput === 'function' ? newInput(s.referenceInput) : newInput;
+        return { ...s, referenceInput: resolvedInput };
+      }
+      return s;
+    }));
+  }, []);
+
+  const selectSession = useCallback((sessionId: string) => {
+    setActiveSessionId(sessionId);
+    setSessions(prev => {
+      const targetSession = prev.find(s => s.id === sessionId);
+      if (targetSession) {
+        setTimeout(() => {
+          // Send beacon / invoke state-changed
+          const stateToSave = { 
+            verses: targetSession.verses, 
+            activeIndex: targetSession.activeVerseIndex, 
+            settings: stateRef.current.settings,
+            translation: targetSession.translation
+          };
+          try {
+            syncChannel.postMessage(stateToSave);
+          } catch (e) {}
+          if (isTauriApp) {
+            invoke('set_state', { state: stateToSave }).catch(() => {});
+          }
+        }, 50);
+      }
+      return prev;
+    });
+  }, [syncChannel, isTauriApp]);
+
   const [readingMode, setReadingMode] = useState(false);
-  const [activeVerseIndex, setActiveVerseIndex] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
 
-  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<AppSettings>(() => {
+    try {
+      const saved = localStorage.getItem('osb_state');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.settings) return { ...DEFAULT_SETTINGS, ...parsed.settings };
+      }
+    } catch (e) {}
+    return DEFAULT_SETTINGS;
+  });
   const [showCustomTextModal, setShowCustomTextModal] = useState(false);
   const [customTextValue, setCustomTextValue] = useState("");
 
@@ -315,19 +525,6 @@ export default function App() {
   const uiBtnBg = uiTheme === 'dark' ? 'bg-slate-800' : 'bg-slate-100';
   const uiBtnHover = uiTheme === 'dark' ? 'hover:bg-slate-700' : 'hover:bg-slate-200';
   const uiShadow = uiTheme === 'dark' ? 'shadow-black/50' : 'shadow-slate-200';
-
-  const [referenceInput, setReferenceInput] = useState("Genesis 1:1-5");
-  const [translation, setTranslation] = useState(() => {
-    try {
-      const saved = localStorage.getItem('osb_state');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.translation) return parsed.translation;
-        if (parsed.settings?.defaultTranslation) return parsed.settings.defaultTranslation;
-      }
-    } catch (e) {}
-    return "esv";
-  });
   const [isLoading, setIsLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [esvApiKey, setEsvApiKey] = useState(() => {
@@ -340,7 +537,6 @@ export default function App() {
   const [resetKey, setResetKey] = useState(0);
   const [isPresenting, setIsPresenting] = useState(false);
   const [availableMonitors, setAvailableMonitors] = useState<any[]>([]);
-  const [isTauriApp, setIsTauriApp] = useState(getIsTauri());
   const [bridgeError, setBridgeError] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -511,17 +707,49 @@ export default function App() {
     }
   }, [appMode]);
 
-  const [syncChannel] = useState(() => {
-    try {
-      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
-        return new BroadcastChannel('verse_sync_channel');
-      }
-    } catch (e) {}
-    // Fallback mock object
-    return { postMessage: () => {}, onmessage: null } as unknown as BroadcastChannel;
-  });
 
   const saveStudy = async () => {
+    try {
+      const { save } = await import('@tauri-apps/plugin-dialog');
+      const { writeTextFile } = await import('@tauri-apps/plugin-fs');
+      
+      let filePath = activeSession.filePath;
+      if (!filePath) {
+        filePath = await save({
+          filters: [{
+            name: 'ScriptureGlide Markup',
+            extensions: ['glide']
+          }]
+        }) || undefined;
+      }
+
+      if (filePath) {
+        const data = {
+          verses,
+          settings,
+          translation,
+          version: '1.0'
+        };
+        await writeTextFile(filePath, JSON.stringify(data, null, 2));
+        const filename = filePath.split(/[/\\]/).pop() || 'Saved Study';
+        
+        // Update session info
+        const targetPath = filePath;
+        setSessions(prev => prev.map(s => {
+          if (s.id === activeSessionId) {
+            return { ...s, filePath: targetPath, name: filename };
+          }
+          return s;
+        }));
+      }
+    } catch (err: any) {
+      console.error('Failed to save markup:', err);
+      const { message } = await import('@tauri-apps/plugin-dialog');
+      await message(`Failed to save: ${err.message || err}`, { title: 'Save Error', kind: 'error' });
+    }
+  };
+
+  const saveStudyAs = async () => {
     try {
       const { save } = await import('@tauri-apps/plugin-dialog');
       const { writeTextFile } = await import('@tauri-apps/plugin-fs');
@@ -541,6 +769,15 @@ export default function App() {
           version: '1.0'
         };
         await writeTextFile(filePath, JSON.stringify(data, null, 2));
+        const filename = filePath.split(/[/\\]/).pop() || 'Saved Study';
+        
+        const targetPath = filePath;
+        setSessions(prev => prev.map(s => {
+          if (s.id === activeSessionId) {
+            return { ...s, filePath: targetPath, name: filename };
+          }
+          return s;
+        }));
       }
     } catch (err: any) {
       console.error('Failed to save markup:', err);
@@ -566,16 +803,28 @@ export default function App() {
         const content = await readTextFile(selected);
         const data = JSON.parse(content);
         
-        if (data.verses) setVerses(data.verses);
-        if (data.settings) setSettings(prev => ({ ...prev, ...data.settings }));
-        if (data.translation) setTranslation(data.translation);
-        
-        // Force a sync to storage/presentation
-        setTimeout(() => syncStateToStorage({ 
-          verses: data.verses, 
-          settings: data.settings,
-          forceDomRead: false 
-        }), 100);
+        if (data.verses) {
+          const filename = selected.split(/[/\\]/).pop() || 'Loaded Study';
+          const newSessionId = `session-${Date.now()}`;
+          const newSession: ScriptureSession = {
+            id: newSessionId,
+            name: filename,
+            verses: data.verses,
+            translation: data.translation || 'esv',
+            activeVerseIndex: 0,
+            referenceInput: data.verses[0]?.reference.split(':')[0] || 'Genesis 1',
+            filePath: selected
+          };
+
+          setSessions(prev => [...prev, newSession]);
+          setActiveSessionId(newSessionId);
+          
+          // Force a sync to storage/presentation
+          setTimeout(() => syncStateToStorage({ 
+            verses: data.verses, 
+            forceDomRead: false 
+          }), 100);
+        }
       }
     } catch (err: any) {
       console.error('Failed to load markup:', err);
@@ -1866,6 +2115,15 @@ export default function App() {
                 >
                   <RotateCcw size={18} />
                 </button>
+                {appMode === 'control' && !readingMode && !sidebarOpen && (
+                  <button
+                    onClick={() => setSidebarOpen(true)}
+                    className={`p-2 ${uiBtnHover} rounded-lg ${uiTextMuted} hover:text-amber-500 transition-colors`}
+                    title="Open Sidebar"
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                )}
                 <div className={`w-px h-6 ${uiTheme === 'dark' ? 'bg-slate-700' : 'bg-slate-200'} mx-1`} />
                 <h1 className="text-lg font-display font-bold tracking-tight hidden lg:block whitespace-nowrap uppercase">
                   ScriptureGlide
@@ -2215,19 +2473,127 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <div 
-        ref={containerRef} 
-        className="flex-1 overflow-y-auto px-6 md:px-12 lg:px-16 flex flex-col no-scrollbar relative h-full transition-colors duration-500" 
-        style={{ backgroundColor: settings.pageColor, fontFamily: activeFont.css, color: settings.theme === 'dark' ? '#f8fafc' : '#0f172a' }}
-        onInput={() => appMode === 'control' && syncStateToStorage({ index: activeVerseIndex, forceDomRead: true })}
-        onMouseUp={() => appMode === 'control' && applyActiveTool()}
-        onDrop={(e) => {
-          if (appMode === 'control') {
-            e.preventDefault();
-            return false;
-          }
-        } }
-      >
+      <div className="flex-1 flex overflow-hidden relative">
+        <AnimatePresence>
+          {appMode === 'control' && !readingMode && sidebarOpen && (
+            <motion.div
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: 280, opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className={`h-full border-r ${uiBorder} ${uiBg} flex flex-col flex-shrink-0 overflow-hidden font-sans z-50`}
+            >
+              <div className="p-4 border-b border-slate-700/50 flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <Library size={18} className="text-amber-500" />
+                  <span className={`font-display font-black uppercase tracking-wider text-sm ${uiText}`}>Library</span>
+                </div>
+                <button
+                  onClick={() => setSidebarOpen(false)}
+                  className={`p-1.5 rounded-lg ${uiBtnHover} ${uiTextMuted} hover:text-amber-500 transition-colors`}
+                  title="Close Sidebar"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+              </div>
+
+              <div className="p-3 border-b border-slate-700/35 flex flex-col gap-2">
+                <button
+                  onClick={() => {
+                    const newSessionId = `session-${Date.now()}`;
+                    const newSession: ScriptureSession = {
+                      id: newSessionId,
+                      name: 'Genesis 1:1-5 (ESV)',
+                      verses: DEFAULT_PASSAGE,
+                      translation: 'esv',
+                      activeVerseIndex: 0,
+                      referenceInput: 'Genesis 1:1-5'
+                    };
+                    setSessions(prev => [...prev, newSession]);
+                    setActiveSessionId(newSessionId);
+                  }}
+                  className="w-full py-2 px-3 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-lg shadow-amber-900/20 active:scale-95"
+                >
+                  <Plus size={14} /> Add Scripture
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto no-scrollbar p-2 space-y-1">
+                {sessions.map(session => {
+                  const isActive = session.id === activeSessionId;
+                  return (
+                    <div
+                      key={session.id}
+                      onClick={() => selectSession(session.id)}
+                      className={`group flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all border ${
+                        isActive
+                          ? 'bg-amber-500/10 border-amber-500/30 text-amber-500 font-medium'
+                          : `border-transparent ${uiTextMuted} hover:bg-slate-800/40 hover:text-white`
+                      }`}
+                    >
+                      <div className="flex flex-col min-w-0 flex-1">
+                        <span className="text-xs truncate font-semibold">
+                          {session.name}
+                        </span>
+                        <span className="text-[9px] opacity-65 uppercase tracking-widest mt-0.5">
+                          {session.translation.toUpperCase()} • {session.verses.length} verses
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {session.filePath && (
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              selectSession(session.id);
+                              setTimeout(() => saveStudy(), 50);
+                            }}
+                            className="p-1 rounded hover:bg-slate-700/60 hover:text-amber-500 transition-colors"
+                            title="Save Changes"
+                          >
+                            <Save size={12} />
+                          </button>
+                        )}
+                        {sessions.length > 1 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const index = sessions.findIndex(s => s.id === session.id);
+                              const newSessions = sessions.filter(s => s.id !== session.id);
+                              setSessions(newSessions);
+                              if (isActive) {
+                                const nextActive = newSessions[Math.min(index, newSessions.length - 1)];
+                                selectSession(nextActive.id);
+                              }
+                            }}
+                            className="p-1 rounded hover:bg-red-500/20 hover:text-red-500 transition-colors"
+                            title="Close Scripture"
+                          >
+                            <X size={12} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div 
+          ref={containerRef} 
+          className="flex-1 overflow-y-auto px-6 md:px-12 lg:px-16 flex flex-col no-scrollbar relative h-full transition-colors duration-500" 
+          style={{ backgroundColor: settings.pageColor, fontFamily: activeFont.css, color: settings.theme === 'dark' ? '#f8fafc' : '#0f172a' }}
+          onInput={() => appMode === 'control' && syncStateToStorage({ index: activeVerseIndex, forceDomRead: true })}
+          onMouseUp={() => appMode === 'control' && applyActiveTool()}
+          onDrop={(e) => {
+            if (appMode === 'control') {
+              e.preventDefault();
+              return false;
+            }
+          } }
+        >
         <div className="h-[40vh] flex-shrink-0" />
         <div key={resetKey} className={`mx-auto w-full transition-all duration-300 select-text ${settings.oneVersePerLine ? 'flex flex-col gap-8' : 'text-start tracking-wide'}`} style={{ fontSize: `${settings.textSize}px`, lineHeight: settings.textSpacing, paddingBottom: '40vh', maxWidth: `${settings.maxWidth}px` }} dir={translation === 'wlc' ? 'rtl' : 'ltr'}>
           {verses.map((verse, index) => {
@@ -2314,6 +2680,7 @@ export default function App() {
         </div>
         <div className="h-[20vh] flex-shrink-0" />
       </div>
+    </div>
 
         <AnimatePresence>
           {verses.length > 0 && settings.showReferenceBox && (
