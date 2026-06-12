@@ -102,10 +102,21 @@ const TRANSLATIONS = [
 ];
 
 const FONT_OPTIONS = [
-  { id: 'academic', name: 'Academic Serif', css: 'var(--font-serif)' },
-  { id: 'modern', name: 'Modern Sans', css: 'var(--font-sans)' },
-  { id: 'display', name: 'Bold Display', css: 'var(--font-display)' },
-  { id: 'study', name: 'Study Monospace', css: 'var(--font-mono)' }
+  { id: 'academic', name: 'Academic Serif (Crimson Pro)', css: 'var(--font-serif)' },
+  { id: 'modern', name: 'Modern Sans (Inter)', css: 'var(--font-sans)' },
+  { id: 'display', name: 'Bold Display (Outfit)', css: 'var(--font-display)' },
+  { id: 'study', name: 'Study Monospace (JetBrains)', css: 'var(--font-mono)' },
+  { id: 'playfair', name: 'Elegant Serif (Playfair)', css: 'var(--font-playfair)' },
+  { id: 'cinzel', name: 'Classical Display (Cinzel)', css: 'var(--font-cinzel)' },
+  { id: 'merriweather', name: 'Warm Serif (Merriweather)', css: 'var(--font-merriweather)' },
+  { id: 'lora', name: 'Literary Serif (Lora)', css: 'var(--font-lora)' },
+  { id: 'caveat', name: 'Handwritten Notes (Caveat)', css: 'var(--font-caveat)' },
+  { id: 'montserrat', name: 'Geometric Sans (Montserrat)', css: 'var(--font-montserrat)' },
+  { id: 'fira', name: 'Humanist Sans (Fira)', css: 'var(--font-fira)' },
+  { id: 'garamond', name: 'Heritage Serif (Garamond)', css: 'var(--font-garamond)' },
+  { id: 'courier', name: 'Typewriter Mono (Courier)', css: 'var(--font-courier)' },
+  { id: 'bebas', name: 'Condensed Impact (Bebas Neue)', css: 'var(--font-bebas)' },
+  { id: 'pacifico', name: 'Fun Script (Pacifico)', css: 'var(--font-pacifico)' }
 ];
 
 const formatReference = (ref: string) => {
@@ -2279,6 +2290,20 @@ export default function App() {
                           className="w-full h-8 rounded cursor-pointer border-none bg-transparent"
                         />
                       </div>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <label className={`text-[9px] font-bold uppercase tracking-widest ${uiTheme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Font Family</label>
+                      <select 
+                        value={settings.fontFamily || 'academic'} 
+                        onChange={(e) => setSettings({...settings, fontFamily: e.target.value})}
+                        className={`w-full p-2.5 ${uiTheme === 'dark' ? 'bg-slate-800' : 'bg-white'} border ${uiBorder} rounded-lg text-xs ${uiText} focus:ring-1 focus:ring-amber-500 outline-none shadow-sm`}
+                      >
+                        {FONT_OPTIONS.map(f => (
+                          <option key={f.id} value={f.id}>
+                            {f.name}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 
